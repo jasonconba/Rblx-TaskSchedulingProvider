@@ -156,11 +156,16 @@ the fact that newspapers are delivered.**
 -- DeliveryManager.luau
 local Provider = require(TaskSchedulingProvider)
 
+const PRIORITIES = {
+    VeryImportant = 1,
+    Important = 100,
+    CanProbablyWait = 1000,
+}
+
 local DeliveryTask = Provider:CreateTask("NewspaperDelivery", {
-    "CollectAddresses",
-    "PlanRoute",
+    "BeforeDelivery",
     "Deliver",
-    "VerifyCompletion",
+    "PostDelivery",
 })
 
 function DeliveryManager:StartDelivery()
@@ -171,12 +176,11 @@ end
 The subscription system independently binds itself to the appropriate sequence.
 
 ```luau
--- SubscriptionSystem.luau
 local DeliveryTask = Provider:WaitForTaskCreation("NewspaperDelivery")
 
-DeliveryTask:BindFunctionToSequence("CollectAddresses", function()
+DeliveryTask:BindFunctionToSequence("BeforeDelivery", function()
     DeliveryState.Addresses = SubscriptionSystem:GetActiveSubscribers()
-end)
+end, PRIORITIES.VeryImportant)
 ```
 
 The route planning system does its own planning.
@@ -193,11 +197,11 @@ function RoutePlanningSystem:CalculateRoute(addresses) :: {string}
     return addresses
 end
 
-DeliveryTask:BindFunctionToSequence("PlanRoute", function()
+DeliveryTask:BindFunctionToSequence("BeforeDelivery", function()
     DeliveryState.Route = RoutePlanningSystem:CalculateRoute(
         DeliveryState.Addresses
     )
-end)
+end, PRIORITIES.Important)
 ```
 
 And the delivery boy just deals with delivery.
@@ -208,7 +212,7 @@ local DeliveryTask = Provider:WaitForTaskCreation("NewspaperDelivery")
 
 DeliveryTask:BindFunctionToSequence("Deliver", function()
     DeliveryBoy:ExecuteRoute(DeliveryState.Route)
-end)
+end, PRIORITIES.VeryImportant)
 ```
 
 And finally, the verification system checks to ensure that all newspapers were delivered.
@@ -217,9 +221,9 @@ And finally, the verification system checks to ensure that all newspapers were d
 -- VerificationSystem.luau
 local DeliveryTask = Provider:WaitForTaskCreation("NewspaperDelivery")
 
-DeliveryTask:BindFunctionToSequence("VerifyCompletion", function()
+DeliveryTask:BindFunctionToSequence("PostDelivery", function()
     DeliveryVerificationSystem:CheckDeliveries()
-end)
+end, PRIORITIES.VeryImportant)
 ```
 
 Now, suppose we have a new resident that really likes the newspaper, and starts subscribing to it.
